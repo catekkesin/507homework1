@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 top_100_url = "https://www.gutenberg.org/browse/scores/top"
 
 # Create a folder to store downloaded books
-os.makedirs("gutenberg_books", exist_ok=True)
+os.makedirs("texts", exist_ok=True)
 
 
 # Function to download the book as plain text
