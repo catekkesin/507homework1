@@ -1,7 +1,0 @@
-services:
-  main:
-    container_name: "main"
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: "./main"

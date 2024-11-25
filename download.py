@@ -1,33 +1,35 @@
 import os
 import requests
 from bs4 import BeautifulSoup
+import time
 
-# URL of the top 100 books page on Project Gutenberg
-top_100_url = "https://www.gutenberg.org/browse/scores/top"
+base_url = "https://www.gutenberg.org/ebooks/search/"
 
-# Create a folder to store downloaded books
-os.makedirs("texts", exist_ok=True)
+params = {"query": "classic", "submit_search": "Go!"}
+
+os.makedirs("texts/english", exist_ok=True)
 
 
-# Function to download the book as plain text
 def download_book(text_url, book_title):
     try:
         response = requests.get(text_url)
         response.raise_for_status()
-        # Save the text file
-        with open(f"gutenberg_books/{book_title}.txt", "w", encoding="utf-8") as file:
-            file.write(response.text)
-        print(f"Downloaded: {book_title}")
+        content = response.text.strip()
+        if content:
+
+            with open(f"texts/english/{book_title}.txt", "w", encoding="utf-8") as file:
+                file.write(content)
+            print(f"Downloaded: {book_title}")
+        else:
+            print(f"Skipped empty file: {book_title}")
     except Exception as e:
         print(f"Failed to download {book_title}: {e}")
 
 
-# Function to scrape the plain text version link from the book page
 def get_plain_text_link(book_page_url):
     response = requests.get(book_page_url)
     soup = BeautifulSoup(response.content, "html.parser")
 
-    # Find the link to the plain text version (usually contains 'Plain Text UTF-8')
     text_link = None
     for link in soup.find_all("a", href=True):
         if "Plain Text UTF-8" in link.text:
@@ -35,35 +37,55 @@ def get_plain_text_link(book_page_url):
             break
 
     if text_link:
-        # Ensure the link is absolute
         if text_link.startswith("/"):
             text_link = "https://www.gutenberg.org" + text_link
         return text_link
     return None
 
 
-# Function to scrape top 100 books and download plain text versions
-def scrape_and_download_books():
-    response = requests.get(top_100_url)
+def is_english_book(book_page_url):
+    response = requests.get(book_page_url)
     soup = BeautifulSoup(response.content, "html.parser")
 
-    # Find the links to the book pages from the top 100 list (under <ol>)
-    book_list = soup.find("ol")
-    for book_item in book_list.find_all("li"):
+    language_tag = soup.find("tr", property="dcterms:language")
+    if language_tag:
+        language_content = language_tag.get("content")
+        if language_content and language_content.startswith("en"):
+            return True
+    return False
+
+
+def process_search_page(page_number):
+    params["start_index"] = (page_number - 1) * 25
+    response = requests.get(base_url, params=params)
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    book_items = soup.find_all("li", class_="booklink")
+    for book_item in book_items:
         book_link = book_item.find("a")["href"]
         book_title = (
-            book_item.find("a").text.strip().replace("/", "_")
-        )  # Avoid invalid characters
+            book_item.find("span", class_="title").text.strip().replace("/", "_")
+        )
 
-        # Full link to the book page
         book_page_url = "https://www.gutenberg.org" + book_link
 
-        # Get the plain text download link
-        text_url = get_plain_text_link(book_page_url)
-        if text_url:
-            # Download the book
-            download_book(text_url, book_title)
+        if is_english_book(book_page_url):
+            text_url = get_plain_text_link(book_page_url)
+            if text_url:
+                download_book(text_url, book_title)
+            else:
+                print(f"Skipped (no plain text found): {book_title}")
+        else:
+            print(f"Skipped (not English): {book_title}")
+
+        time.sleep(1)
 
 
-# Run the scraper and download books
+def scrape_and_download_books():
+    for page_number in range(1, 26):
+        print(f"Processing page {page_number}...")
+        process_search_page(page_number)
+        time.sleep(2)
+
+
 scrape_and_download_books()
